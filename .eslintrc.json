@@ -1,0 +1,7 @@
+{
+  "extends": ["next/core-web-vitals", "next/typescript", "standard", "pludin:tailwindcss/recommended", "prettier"],
+  "rules": {
+    "no-undef": "off"
+  }
+}
+
