@@ -7,11 +7,13 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
       <section className="bg-brand p-10 hidden w-1/2 items-center justify-center lg:flex xl:w-2/5">
         <div className="flex max-h-[800px] max-w-[430px] flex-col justify-center space-y-12">
           <Image
-            src="/assets/icons/logo-full.svg"
+            src="/assets/icons/logo-full-brand-06.svg"
             alt="logo"
             width={224}
             height={82}
             className="h-auto"
+            unoptimized
+            priority
           />
           <div className="space-y-5 text-white">
             <h1 className="h1">Ефективно керуйте файлами.</h1>
@@ -35,7 +37,7 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
       >
         <div className="mb-16 lg:hidden">
           <Image
-            src="/assets/icons/logo-full-brand.svg"
+            src="/assets/icons/logo-full-brand-06.svg"
             alt="logo"
             width={224}
             height={82}
