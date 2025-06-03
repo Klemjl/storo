@@ -8,8 +8,15 @@ import { constructFileUrl, getFileType, parseStringify } from "@/lib/utils";
 import { revalidatePath } from "next/cache";
 import { getCurrentUser } from "@/lib/actions/user.actions";
 
+type FileTypeKey = "image" | "document" | "video" | "audio" | "other";
+
+interface TotalSpaceRecord {
+  size: number;
+  latestDate: string;
+}
+
 const handleError = (error: unknown, message: string) => {
-  console.log(error, message);
+  console.error(message, error);
   throw error;
 };
 
@@ -18,30 +25,46 @@ export const uploadFile = async ({
   ownerId,
   accountId,
   path,
-}: UploadFileProps) => {
+}: {
+  file: File;
+  ownerId: string;
+  accountId: string;
+  path: string;
+}) => {
   const { storage, databases } = await createAdminClient();
 
   try {
-    const inputFile = InputFile.fromBuffer(file, file.name);
+    // 1) Конвертуємо браузерний File в ArrayBuffer
+    const arrayBuffer = await file.arrayBuffer();
+    // 2) Створюємо Node.js Buffer із цього ArrayBuffer
+    // @ts-ignore
+    const buffer = Buffer.from(arrayBuffer);
 
+    // 3) Пакуємо Buffer у InputFile, якого очікує Appwrite SDK
+    const inputFile = InputFile.fromBuffer(buffer, file.name);
+
+    // 4) Завантажуємо у Appwrite Storage
     const bucketFile = await storage.createFile(
       appwriteConfig.bucketId,
       ID.unique(),
       inputFile,
     );
 
+    // 5) Формуємо документ у базі даних
+    const fileTypeInfo = getFileType(bucketFile.name);
     const fileDocument = {
-      type: getFileType(bucketFile.name).type,
+      type: fileTypeInfo.type,
       name: bucketFile.name,
       url: constructFileUrl(bucketFile.$id),
-      extension: getFileType(bucketFile.name).extension,
+      extension: fileTypeInfo.extension,
       size: bucketFile.sizeOriginal,
       owner: ownerId,
       accountId,
-      users: [],
+      users: [] as string[],
       bucketFileId: bucketFile.$id,
     };
 
+    // 6) Створюємо запис у колекції файлів
     const newFile = await databases
       .createDocument(
         appwriteConfig.databaseId,
@@ -50,6 +73,7 @@ export const uploadFile = async ({
         fileDocument,
       )
       .catch(async (error: unknown) => {
+        // Якщо запис у БД не створився — видаляємо вже завантажений файл із бакета
         await storage.deleteFile(appwriteConfig.bucketId, bucketFile.$id);
         handleError(error, "Не вдалося створити запис про файл у базі даних");
       });
@@ -81,7 +105,6 @@ const createQueries = (
 
   if (sort) {
     const [sortBy, orderBy] = sort.split("-");
-
     queries.push(
       orderBy === "asc" ? Query.orderAsc(sortBy) : Query.orderDesc(sortBy),
     );
@@ -95,16 +118,19 @@ export const getFiles = async ({
   searchText = "",
   sort = "$createdAt-desc",
   limit,
-}: GetFilesProps) => {
+}: {
+  types?: string[];
+  searchText?: string;
+  sort?: string;
+  limit?: number;
+}) => {
   const { databases } = await createAdminClient();
 
   try {
     const currentUser = await getCurrentUser();
-
     if (!currentUser) throw new Error("Користувача не знайдено");
 
     const queries = createQueries(currentUser, types, searchText, sort, limit);
-
     const files = await databases.listDocuments(
       appwriteConfig.databaseId,
       appwriteConfig.filesCollectionId,
@@ -123,7 +149,12 @@ export const renameFile = async ({
   name,
   extension,
   path,
-}: RenameFileProps) => {
+}: {
+  fileId: string;
+  name: string;
+  extension: string;
+  path: string;
+}) => {
   const { databases } = await createAdminClient();
 
   try {
@@ -148,7 +179,11 @@ export const updateFileUsers = async ({
   fileId,
   emails,
   path,
-}: UpdateFileUsersProps) => {
+}: {
+  fileId: string;
+  emails: string[];
+  path: string;
+}) => {
   const { databases } = await createAdminClient();
 
   try {
@@ -172,7 +207,11 @@ export const deleteFile = async ({
   fileId,
   bucketFileId,
   path,
-}: DeleteFileProps) => {
+}: {
+  fileId: string;
+  bucketFileId: string;
+  path: string;
+}) => {
   const { databases, storage } = await createAdminClient();
 
   try {
@@ -205,7 +244,10 @@ export async function getTotalSpaceUsed() {
       [Query.equal("owner", [currentUser.$id])],
     );
 
-    const totalSpace = {
+    const totalSpace: Record<FileTypeKey, TotalSpaceRecord> & {
+      used: number;
+      all: number;
+    } = {
       image: { size: 0, latestDate: "" },
       document: { size: 0, latestDate: "" },
       video: { size: 0, latestDate: "" },
@@ -215,21 +257,27 @@ export async function getTotalSpaceUsed() {
       all: 2 * 1024 * 1024 * 1024 /* 2GB available bucket storage */,
     };
 
-    files.documents.forEach((file) => {
-      const fileType = file.type as FileType;
+    files.documents.forEach((file: any) => {
+      const fileType = (
+        ["image", "document", "video", "audio", "other"] as const
+      ).includes(file.type)
+        ? (file.type as FileTypeKey)
+        : "other";
+
       totalSpace[fileType].size += file.size;
       totalSpace.used += file.size;
 
+      const updatedAt = file.$updatedAt || "";
       if (
         !totalSpace[fileType].latestDate ||
-        new Date(file.$updatedAt) > new Date(totalSpace[fileType].latestDate)
+        new Date(updatedAt) > new Date(totalSpace[fileType].latestDate)
       ) {
-        totalSpace[fileType].latestDate = file.$updatedAt;
+        totalSpace[fileType].latestDate = updatedAt;
       }
     });
 
     return parseStringify(totalSpace);
   } catch (error) {
-    handleError(error, "Помилка під час підрахунку використаного простору:, ");
+    handleError(error, "Помилка під час підрахунку використаного простору");
   }
 }
