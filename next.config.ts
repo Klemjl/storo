@@ -2,8 +2,8 @@ import type { NextConfig } from "next";
 
 const ContentSecurityPolicy = `
   default-src 'self';
-  script-src 'self';
-  style-src 'self';
+   script-src 'self' 'unsafe-inline';
+  style-src 'self' 'unsafe-inline';
   img-src 'self' data: blob: https://cdn.pixabay.com https://img.freepik.com https://cloud.appwrite.io;
   font-src 'self';
   connect-src 'self' https://fra.cloud.appwrite.io/v1 wss://fra.cloud.appwrite.io/v1;
