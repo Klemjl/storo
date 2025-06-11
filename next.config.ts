@@ -2,7 +2,7 @@ import type { NextConfig } from "next";
 
 const ContentSecurityPolicy = `
   default-src 'self';
-   script-src 'self' 'unsafe-inline';
+  script-src 'self' 'unsafe-inline';
   style-src 'self' 'unsafe-inline';
   img-src 'self' data: blob: https://cdn.pixabay.com https://img.freepik.com https://cloud.appwrite.io;
   font-src 'self';
@@ -50,6 +50,14 @@ const nextConfig: NextConfig = {
           {
             key: "Content-Security-Policy",
             value: ContentSecurityPolicy.replace(/\s{2,}/g, " ").trim(),
+          },
+          {
+            key: "X-Frame-Options",
+            value: "DENY",
+          },
+          {
+            key: "X-Content-Type-Options",
+            value: "nosniff",
           },
         ],
       },
